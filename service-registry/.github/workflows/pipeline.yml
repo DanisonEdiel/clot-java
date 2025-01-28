@@ -1,0 +1,41 @@
+name: Deploy Service Registry on ECR
+
+on:
+  push:
+    branches:
+      - main
+ 
+
+jobs:
+  create-docker-image:
+    name: Build Image - Create image docker
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: Configurar Credenciales de AWS
+      uses: aws-actions/configure-aws-credentials@v1
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: us-west-1
+    - name: Create ECR Public Repository if Not Exists
+      run: |
+          REPO_NAME="service-registry"
+          if ! aws ecr-public describe-repositories --repository-names $REPO_NAME > /dev/null 2>&1; then
+            echo "Public repository $REPO_NAME does not exist. Creating..."
+            aws ecr-public create-repository --repository-name $REPO_NAME
+          else
+            echo "Public repository $REPO_NAME already exists."
+          fi
+    - name: Login in AWS ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v1
+
+    - name: Crear, etiquetar y enviar imágen a AWS ECR
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        ECR_REPOSITORY: service-registry
+        IMAGE_TAG: latest
+      run: |
+        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
